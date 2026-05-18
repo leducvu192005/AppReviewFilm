@@ -1,31 +1,31 @@
 import 'dart:async';
-import 'package:flutter_application_1/Screen/widgets/movie_card.dart';
-import 'package:flutter_application_1/models/movie.dart' show Movie;
+import 'package:flutter_application_1/Screen/TV_show/TV_Show_detail.dart';
+
+import '../widgets/color_background.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:flutter_application_1/services/movie_service.dart';
-import 'package:flutter_application_1/Screen/widgets/empty_movies.dart';
-import 'package:flutter_application_1/Screen/widgets/home_error_state.dart';
-import 'package:flutter_application_1/Screen/widgets/search_field.dart';
+import '../../models/movie.dart';
+import '../../services/movie_service.dart';
+import '../widgets/home_error_state.dart';
+import '../widgets/search_field.dart';
+import 'movie_detail.dart';
+import 'package:flutter_application_1/Screen/widgets/media_home_content.dart';
 import 'package:flutter_application_1/Screen/widgets/top_rated_movies.dart';
 import 'package:flutter_application_1/Screen/widgets/upcoming_movies.dart';
-import 'TV_Show_detail.dart';
-import 'package:flutter_application_1/Screen/widgets/media_home_content.dart';
 
-class TVShowHome extends StatefulWidget {
-  const TVShowHome({super.key});
+class Home extends StatefulWidget {
+  const Home({super.key});
 
   @override
-  State<TVShowHome> createState() => _TVShowHomeState();
+  State<Home> createState() => _HomeState();
 }
 
-class _TVShowHomeState extends State<TVShowHome> {
+class _HomeState extends State<Home> {
   final MovieService _movieService = MovieService();
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
 
-  HomeTVShowData? _movieData;
-
+  HomeMovieData? _movieData;
   List<Movie> _searchResults = [];
   String _query = '';
   bool _isLoading = true;
@@ -52,7 +52,7 @@ class _TVShowHomeState extends State<TVShowHome> {
     });
 
     try {
-      final movieData = await _movieService.fetchHomeTVShow() as HomeTVShowData;
+      final movieData = await _movieService.fetchHomeMovies();
       if (!mounted) return;
       setState(() {
         _movieData = movieData;
@@ -109,24 +109,10 @@ class _TVShowHomeState extends State<TVShowHome> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color.fromARGB(255, 37, 49, 37),
-            Color.fromARGB(255, 49, 67, 57),
-            Color.fromARGB(255, 29, 30, 29),
-          ],
-          stops: [0.0, 0.4, 1.0],
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        extendBody: true,
-        body: SafeArea(bottom: false, child: _buildBody()),
-      ),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      extendBody: true,
+      body: MovieHomeBackground(child: SafeArea(child: _buildBody())),
     );
   }
 
@@ -198,7 +184,7 @@ class _CarouselWrapperState extends State<_CarouselWrapper> {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: 260,
+          height: 240,
           child: PageView.builder(
             controller: _controller,
             itemCount: widget.movies.length,
@@ -211,16 +197,17 @@ class _CarouselWrapperState extends State<_CarouselWrapper> {
                   scale: scale,
                   child: SizedBox(
                     width: 288,
-                    height: 233,
+                    height: 213,
                     child: FeaturedMovieCard(
                       movie: movie,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              TVShowDetailScreen(tvShowId: movie.id),
-                        ),
-                      ),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                MovieDetailScreen(movieId: movie.id),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -258,14 +245,6 @@ class _CarouselWrapperState extends State<_CarouselWrapper> {
 }
 
 class MovieHomeContent extends StatelessWidget {
-  final HomeTVShowData data;
-  final String query;
-  final List<Movie> searchResults;
-  final bool isSearching;
-  final TextEditingController searchController;
-  final ValueChanged<String> onSearchChanged;
-  final Future<void> Function() onRefresh;
-
   const MovieHomeContent({
     super.key,
     required this.data,
@@ -276,6 +255,15 @@ class MovieHomeContent extends StatelessWidget {
     required this.onSearchChanged,
     required this.onRefresh,
   });
+
+  final HomeMovieData data;
+  final String query;
+  final List<Movie> searchResults;
+  final bool isSearching;
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearchChanged;
+  final Future<void> Function() onRefresh;
+
   @override
   Widget build(BuildContext context) {
     final isSearchMode = query.isNotEmpty;
@@ -322,7 +310,7 @@ class MovieHomeContent extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         const Expanded(
-                          child: SectionTitle(title: 'Most Popular TV Shows'),
+                          child: SectionTitle(title: 'Most Popular Movies'),
                         ),
                       ],
                     ),
@@ -341,10 +329,11 @@ class MovieHomeContent extends StatelessWidget {
                         );
                       },
                       onTapMovie: (movie) {
-                        Navigator.of(context).push(
+                        Navigator.push(
+                          context,
                           MaterialPageRoute(
                             builder: (context) =>
-                                TVShowDetailScreen(tvShowId: movie.id),
+                                MovieDetailScreen(movieId: movie.id),
                           ),
                         );
                       },
@@ -352,14 +341,14 @@ class MovieHomeContent extends StatelessWidget {
 
                     const SizedBox(height: 5),
 
-                    CurrentAiring(
-                      title: 'Currently Airing TV Shows',
-                      movies: data.airingToday,
+                    Movieupcoming(
+                      title: 'Up Coming',
+                      movies: data.upcoming,
                       onViewAll: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (context) =>
-                                UpComingMoviesPage(movies: data.airingToday),
+                                UpComingMoviesPage(movies: data.upcoming),
                           ),
                         );
                       },
@@ -371,69 +360,6 @@ class MovieHomeContent extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class CurrentAiring extends StatelessWidget {
-  const CurrentAiring({
-    super.key,
-    required this.title,
-    required this.movies,
-    this.isLoading = false,
-    this.showViewAll = true,
-    this.onViewAll,
-    this.airingtoday = const [],
-  });
-
-  final String title;
-  final List<Movie> movies;
-  final bool isLoading;
-  final bool showViewAll;
-  final VoidCallback? onViewAll;
-  final List<Movie> airingtoday;
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionTitle(
-          title: title,
-          showViewAll: showViewAll,
-          onViewAll: onViewAll,
-        ),
-        const SizedBox(height: 12),
-        if (isLoading)
-          const SizedBox(
-            height: 96,
-            child: Center(
-              child: CircularProgressIndicator(color: Color(0xFFFFD21E)),
-            ),
-          )
-        else if (movies.isEmpty)
-          const EmptyMovies()
-        else
-          SizedBox(
-            height: 251,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: movies.length,
-              separatorBuilder: (context, index) => const SizedBox(width: 14),
-              itemBuilder: (context, index) => MovieCard(
-                movie: movies[index],
-                rank: index < 0 ? index + 1 : null,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        TVShowDetailScreen(tvShowId: movies[index].id),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

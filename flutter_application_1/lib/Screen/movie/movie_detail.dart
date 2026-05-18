@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screen/poster_page.dart';
-import '../models/movie.dart';
-import '../services/movie_service.dart';
-import 'widgets/movie_card.dart';
+import 'package:flutter_application_1/Screen/widgets/poster_page.dart';
+import 'package:flutter_application_1/models/movie.dart';
+import 'package:flutter_application_1/services/movie_service.dart';
+import 'package:flutter_application_1/services/favorite_service.dart';
+import 'package:flutter_application_1/Screen/widgets/movie_card.dart';
+import 'package:flutter_svg/svg.dart';
+import "package:url_launcher/url_launcher.dart";
 
 class MovieDetailScreen extends StatefulWidget {
   final int movieId;
@@ -18,20 +21,48 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   late Future<Movie> _movieFuture;
   late Future<List<dynamic>> _castFuture;
   late Future<List<Movie>> _similarFuture;
-
+  List<Movie> movies = [];
   @override
   void initState() {
     super.initState();
-    // Gọi API lấy chi tiết phim, cast và phim tương tự
     _movieFuture = _movieService.fetchMovieDetails(widget.movieId);
     _castFuture = _movieService.fetchMovieCast(widget.movieId);
     _similarFuture = _movieService.fetchSimilarMovies(widget.movieId);
+    _checkIfFavorite(widget.movieId);
+  }
+
+  final FavoriteService _favoriteService = FavoriteService();
+  bool _favoriteChecked = false;
+
+  Future<void> _checkIfFavorite(int id) async {
+    final fav = await _favoriteService.isFavorite(id);
+    if (mounted) {
+      setState(() {
+        _isFavorite = fav;
+        _favoriteChecked = true;
+      });
+    }
+  }
+
+  Future<void> _playTrailer(int movieId) async {
+    final movieService = MovieService();
+    final trailerKey = await movieService.getYoutubeTrailerKey(movieId);
+
+    if (trailerKey != null) {
+      final Uri url = Uri.parse('https://www.youtube.com/watch?v=$trailerKey');
+
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        debugPrint('Could not launch trailer');
+      } else {
+        debugPrint('No trailer found for this movie');
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F1012), // Màu xám đen chuẩn thiết kế
+      backgroundColor: Colors.blueGrey,
       body: FutureBuilder<Movie>(
         future: _movieFuture,
         builder: (context, snapshot) {
@@ -54,11 +85,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               ? movie.releaseDate.split('-')[0]
               : 'N/A';
           final genres = movie.genres?.join(', ') ?? 'N/A';
-
           return Stack(
             children: [
-              // 1. Backdrop Image & Gradient
-              Positioned.fill(
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 400,
                 child: Image.network(movie.backdropUrl, fit: BoxFit.cover),
               ),
               Positioned.fill(
@@ -70,20 +103,18 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       colors: [
                         Colors.black.withValues(alpha: 0.2),
                         const Color(0xFF0F1012).withValues(alpha: 0.8),
-                        const Color(0xFF0F1012),
+                        const Color.fromARGB(255, 35, 36, 36),
                       ],
                       stops: const [0.0, 0.4, 0.7],
                     ),
                   ),
                 ),
               ),
-
-              // 2. Nội dung chi tiết
               SafeArea(
                 child: CustomScrollView(
                   physics: const BouncingScrollPhysics(),
                   slivers: [
-                    _buildAppBar(context),
+                    _buildAppBar(context, movie),
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -120,7 +151,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
+  bool _isFavorite = false;
+  Widget _buildAppBar(BuildContext context, Movie movie) {
     return SliverAppBar(
       backgroundColor: Colors.transparent,
       automaticallyImplyLeading: false,
@@ -144,7 +176,20 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           padding: const EdgeInsets.only(right: 18),
           child: CircleAvatar(
             backgroundColor: Colors.black.withValues(alpha: 0.5),
-            child: const Icon(Icons.favorite_border, color: Color(0xFFFFD21E)),
+            child: IconButton(
+              icon: Icon(
+                _isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: const Color(0xFFFFD21E),
+                size: 20,
+              ),
+              onPressed: () async {
+                setState(() {
+                  _isFavorite = !_isFavorite;
+                });
+
+                await _favoriteService.toggleFavorite(movie);
+              },
+            ),
           ),
         ),
       ],
@@ -152,6 +197,10 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   }
 
   Widget _buildHeaderInfo(Movie movie, String year, String genres) {
+    final runtimeText = movie.runtimeFormatted.isNotEmpty
+        ? movie.runtimeFormatted
+        : '${movie.runtime}m';
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -180,7 +229,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${movie.releaseDate}  |  $genres  |  ${movie.runtime ?? 0}m',
+                '${movie.releaseDate}  |  $genres  |  $runtimeText',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 11,
@@ -194,54 +243,65 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   }
 
   Widget _buildActionButtons() {
-    return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PosterScreen(movieId: widget.movieId),
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () => _playTrailer(widget.movieId),
+            icon: const Icon(Icons.play_circle_outline, color: Colors.white),
+            label: const Text(
+              'Play Trailer',
+              style: TextStyle(color: Colors.white),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(88),
+              ),
+            ),
+          ),
         ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.play_circle_outline, color: Colors.white),
-              label: const Text(
-                'Play Trailer',
-                style: TextStyle(color: Colors.white),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(88),
+
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      PosterScreen(id: widget.movieId, type: MediaType.movie),
                 ),
+              );
+            },
+            icon: SvgPicture.asset(
+              'assets/icons/image-01.svg',
+              width: 20,
+              height: 20,
+              colorFilter: const ColorFilter.mode(
+                Color(0xFFFFD21E),
+                BlendMode.srcIn,
+              ),
+            ),
+            label: const Text(
+              'Posters',
+              style: TextStyle(
+                color: Color(0xFFFFD21E),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              side: const BorderSide(color: Color(0xFFFFD21E), width: 1),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(88),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.image_outlined, color: Color(0xFF1D1D1D)),
-              label: const Text(
-                'Posters',
-                style: TextStyle(color: Color(0xFF1D1D1D)),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(
-                  0xFFFFD21E,
-                ), // Màu vàng thương hiệu
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(88),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -333,8 +393,18 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
             scrollDirection: Axis.horizontal,
             itemCount: movies.length,
             separatorBuilder: (context, index) => const SizedBox(width: 14),
-            itemBuilder: (context, index) =>
-                MovieCard(movie: movies[index], width: 120, height: 180),
+            itemBuilder: (context, index) => MovieCard(
+              movie: movies[index],
+              width: 120,
+              height: 180,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      MovieDetailScreen(movieId: movies[index].id),
+                ),
+              ),
+            ),
           ),
         );
       },

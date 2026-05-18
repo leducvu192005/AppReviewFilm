@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'Screen/home.dart';
+import 'layout.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         scaffoldBackgroundColor: const Color(0xFF0E2525),
       ),
-      home: const Home(),
+      home: const Layout(),
     );
   }
 }

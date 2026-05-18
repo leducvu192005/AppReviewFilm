@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../movie_detail.dart';
+import '../movie/movie_detail.dart';
 import '../../models/movie.dart';
 
 class CardMovieUpcoming extends StatelessWidget {
@@ -30,7 +30,6 @@ class CardMovieUpcoming extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 🎬 POSTER
             Stack(
               children: [
                 ClipRRect(
@@ -38,7 +37,7 @@ class CardMovieUpcoming extends StatelessWidget {
                   child: Image.network(
                     movie.posterUrl,
                     width: width,
-                    height: height - 50, // 👈 chừa chỗ cho text
+                    height: height - 50,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
@@ -56,7 +55,6 @@ class CardMovieUpcoming extends StatelessWidget {
                   ),
                 ),
 
-                // 🏷 RANK (giữ lại)
                 if (rank != null)
                   Positioned(
                     top: 0,
@@ -88,7 +86,6 @@ class CardMovieUpcoming extends StatelessWidget {
 
             const SizedBox(height: 8),
 
-            // 📝 TEXT dưới ảnh
             Text(
               movie.title,
               maxLines: 2,

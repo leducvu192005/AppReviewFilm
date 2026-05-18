@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/Screen/widgets/season_list.dart';
 import 'package:flutter_application_1/Screen/widgets/tvshow_card.dart';
 import 'package:flutter_application_1/models/movie.dart';
 import 'package:flutter_application_1/services/movie_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'poster_tv.dart';
+import 'package:flutter_application_1/services/favorite_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_application_1/Screen/widgets/poster_page.dart';
 
 class TVShowDetailScreen extends StatefulWidget {
   final int tvShowId;
@@ -17,14 +19,14 @@ class TVShowDetailScreen extends StatefulWidget {
 
 class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
   final MovieService _movieService = MovieService();
-
   late Future<Movie> _movieFuture;
   late Future<List<dynamic>> _castFuture;
-  late Future<List<String>> _posterFuture;
   late Future<List<Movie>> _similarFuture;
+  late Future<List<String>> _posterFuture;
   late Future<List<dynamic>> _seasonsFuture;
-
   bool _isFavorite = false;
+  bool _favoriteChecked = false;
+  final FavoriteService _favoriteService = FavoriteService();
 
   @override
   void initState() {
@@ -37,7 +39,17 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
     _seasonsFuture = _movieService.fetchAllSeason(widget.tvShowId);
     _posterFuture = _movieService.fetchPosterTVShow(widget.tvShowId);
     _similarFuture = _movieService.fetchSimilarTVShows(widget.tvShowId);
-    _checkIfFavorite();
+    _checkIfFavorite(widget.tvShowId);
+  }
+
+  Future<void> _checkIfFavorite(int id) async {
+    final fav = await _favoriteService.isFavorite(id);
+    if (mounted) {
+      setState(() {
+        _isFavorite = fav;
+        _favoriteChecked = true;
+      });
+    }
   }
 
   Future<void> _playTrailer(int movieId) async {
@@ -55,18 +67,10 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
     }
   }
 
-  Future<void> _checkIfFavorite() async {
-    final favorites = await FavoriteService.getFavorites();
-
-    setState(() {
-      _isFavorite = favorites.contains(widget.tvShowId.toString());
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF111315),
+      backgroundColor: Colors.grey,
 
       body: FutureBuilder<Movie>(
         future: _movieFuture,
@@ -92,11 +96,14 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
           final year = movie.releaseDate.isNotEmpty
               ? movie.releaseDate.split('-')[0]
               : '';
-
+          final seasonsText =
+              movie.seasonCount != null && movie.seasonCount! > 0
+              ? '${movie.seasonCount} Season${movie.seasonCount == 1 ? '' : 's'}'
+              : 'N/A';
           return Stack(
             children: [
               SizedBox(
-                height: 320,
+                height: 400,
                 width: double.infinity,
 
                 child: Image.network(movie.backdropUrl, fit: BoxFit.cover),
@@ -111,7 +118,7 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                     colors: [
                       Colors.transparent,
                       Color(0xCC111315),
-                      Color(0xFF111315),
+                      Color.fromARGB(255, 61, 61, 61),
                     ],
 
                     stops: [0.2, 0.55, 0.8],
@@ -147,14 +154,13 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                                   icon: _isFavorite
                                       ? Icons.favorite
                                       : Icons.favorite_border,
-
                                   onTap: () async {
                                     setState(() {
                                       _isFavorite = !_isFavorite;
                                     });
 
-                                    await FavoriteService.toggleFavorite(
-                                      movie.id,
+                                    await _favoriteService.toggleFavorite(
+                                      movie,
                                     );
                                   },
                                 ),
@@ -203,7 +209,7 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                                       const SizedBox(height: 8),
 
                                       Text(
-                                        '$year  |  Drama  |  ${movie.runtime ?? 0}m',
+                                        '$year  |  Drama  |  $seasonsText',
 
                                         style: TextStyle(
                                           color: Colors.white.withValues(
@@ -236,22 +242,7 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                                                   color: Colors.white,
                                                 ),
                                               ),
-                                              /*Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () => _playTrailer(widget.movieId),
-            icon: const Icon(Icons.play_circle_outline, color: Colors.white),
-            label: const Text(
-              'Play Trailer',
-              style: TextStyle(color: Colors.white),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(88),
-              ),
-            ),
-          ),*/
+
                                               style: OutlinedButton.styleFrom(
                                                 side: BorderSide(
                                                   color: Colors.white
@@ -281,41 +272,46 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
 
                                                   MaterialPageRoute(
                                                     builder: (context) =>
-                                                        PosterTv(
-                                                          tvShowId:
-                                                              widget.tvShowId,
+                                                        PosterScreen(
+                                                          id: widget.tvShowId,
+                                                          type: MediaType.tv,
                                                         ),
                                                   ),
                                                 );
                                               },
 
-                                              icon: const Icon(
-                                                Icons.image_outlined,
-
-                                                color: Color(0xFF1D1D1D),
+                                              icon: SvgPicture.asset(
+                                                'assets/icons/image-01.svg',
+                                                colorFilter:
+                                                    const ColorFilter.mode(
+                                                      Color(0xFFFFD21E),
+                                                      BlendMode.srcIn,
+                                                    ),
+                                                width: 20,
+                                                height: 20,
                                               ),
-
                                               label: const Text(
                                                 'Posters',
 
                                                 style: TextStyle(
-                                                  color: Color(0xFF1D1D1D),
+                                                  color: Color(0xFFFFD21E),
                                                 ),
                                               ),
 
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(
-                                                  0xFFFFD21E,
+                                              style: OutlinedButton.styleFrom(
+                                                backgroundColor:
+                                                    Colors.transparent,
+                                                side: const BorderSide(
+                                                  color: Color(0xFFFFD21E),
+                                                  width: 1,
                                                 ),
-
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                      vertical: 14,
+                                                      vertical: 12,
                                                     ),
-
                                                 shape: RoundedRectangleBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(50),
+                                                      BorderRadius.circular(88),
                                                 ),
                                               ),
                                             ),
@@ -429,32 +425,50 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
     return FutureBuilder<List<dynamic>>(
       future: _movieService.fetchAllSeason(widget.tvShowId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const SizedBox();
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error: ${snapshot.error}',
+              style: const TextStyle(color: Colors.white),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox();
+        }
 
         final seasons = snapshot.data!;
 
-        return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    TVShowDetailScreen(tvShowId: widget.tvShowId),
-              ),
-            );
-          },
-          child: ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: seasons.length,
-            itemBuilder: (context, index) {
-              final season = seasons[index];
-              final String airDate = season['air_date'] ?? '';
-              final String year = airDate.isNotEmpty
-                  ? airDate.split('-')[0]
-                  : '';
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: seasons.length,
+          itemBuilder: (context, index) {
+            final season = seasons[index];
 
-              return Padding(
+            final String airDate = season['air_date'] ?? '';
+
+            final String year = airDate.isNotEmpty ? airDate.split('-')[0] : '';
+
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SeasonList(
+                      tvShowId: widget.tvShowId,
+                      seasonNumber: season['season_number'],
+                      seasonName: season['name'],
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -466,18 +480,22 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                         width: 110,
                         height: 160,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          width: 110,
-                          height: 160,
-                          color: Colors.grey[900],
-                          child: const Icon(
-                            Icons.broken_image,
-                            color: Colors.white24,
-                          ),
-                        ),
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            width: 110,
+                            height: 160,
+                            color: Colors.grey[900],
+                            child: const Icon(
+                              Icons.broken_image,
+                              color: Colors.white24,
+                            ),
+                          );
+                        },
                       ),
                     ),
+
                     const SizedBox(width: 16),
+
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -490,7 +508,9 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+
                           const SizedBox(height: 4),
+
                           Text(
                             '$year | ${season['episode_count']} Episodes',
                             style: const TextStyle(
@@ -498,12 +518,15 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                               fontSize: 14,
                             ),
                           ),
+
                           const SizedBox(height: 12),
+
                           Text(
                             season['overview'] != null &&
                                     season['overview'].toString().isNotEmpty
                                 ? season['overview']
-                                : 'Season ${season['season_number']} of the series premiered on $airDate.',
+                                : 'Season ${season['season_number']} '
+                                      'of the series premiered on $airDate.',
                             maxLines: 4,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -517,9 +540,9 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                     ),
                   ],
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         );
       },
     );
@@ -559,7 +582,7 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
                     CircleAvatar(
                       radius: 50,
 
-                      backgroundColor: Colors.grey.shade800,
+                      backgroundColor: Colors.grey,
 
                       backgroundImage: profile != null
                           ? NetworkImage(
@@ -642,31 +665,5 @@ class _TVShowDetailScreenState extends State<TVShowDetailScreen> {
         );
       },
     );
-  }
-}
-
-class FavoriteService {
-  static const String _key = 'favorite_movies';
-
-  static Future<List<String>> getFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    return prefs.getStringList(_key) ?? [];
-  }
-
-  static Future<void> toggleFavorite(int movieId) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    List<String> favorites = prefs.getStringList(_key) ?? [];
-
-    String id = movieId.toString();
-
-    if (favorites.contains(id)) {
-      favorites.remove(id);
-    } else {
-      favorites.add(id);
-    }
-
-    await prefs.setStringList(_key, favorites);
   }
 }
